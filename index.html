@@ -50,6 +50,16 @@
                 <h1 class="text-3xl sm:text-4xl font-bold text-gray-900">영수증 스캐너 및 가계부 정리</h1>
                 <p class="text-gray-600 mt-2">여러 영수증 사진을 한 번에 올리면 AI가 자동으로 내용을 분석하여 정리해줍니다.</p>
             </div>
+            
+            <!-- API Key Input Section -->
+            <div class="mb-8 p-4 border-l-4 border-blue-500 bg-blue-50 rounded-r-lg">
+                <label for="api-key-input" class="block mb-2 text-lg font-medium text-gray-700">Google AI API 키 입력</label>
+                <p class="text-sm text-gray-600 mb-2">
+                    이 도구를 사용하려면 Google AI Studio의 API 키가 필요합니다. 
+                    <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-600 hover:underline font-semibold">여기에서 무료로 API 키를 발급받으세요.</a>
+                </p>
+                <input type="password" id="api-key-input" class="w-full p-2 border border-gray-300 rounded-lg" placeholder="여기에 API 키를 붙여넣으세요">
+            </div>
 
             <!-- 파일 업로드 섹션 -->
             <div class="mb-6">
@@ -143,6 +153,7 @@
     </div>
 
     <script>
+        const apiKeyInput = document.getElementById('api-key-input');
         const uploadInput = document.getElementById('receipt-upload');
         const analyzeButton = document.getElementById('analyze-button');
         const imagePreviewContainer = document.getElementById('image-preview-container');
@@ -157,7 +168,14 @@
         let filesToProcess = [];
         let allReceiptsData = [];
 
-        // 1. 이미지 업로드 및 미리보기 처리
+        function checkCanAnalyze() {
+            const apiKey = apiKeyInput.value.trim();
+            const filesExist = filesToProcess.length > 0;
+            analyzeButton.disabled = !(apiKey && filesExist);
+        }
+
+        apiKeyInput.addEventListener('input', checkCanAnalyze);
+
         uploadInput.addEventListener('change', (event) => {
             const files = event.target.files;
             if (files.length > 0) {
@@ -177,19 +195,25 @@
                     reader.readAsDataURL(file);
                 });
                 
-                analyzeButton.disabled = false;
+                checkCanAnalyze();
             }
         });
 
-        // 2. '영수증 분석하기' 버튼 클릭 이벤트
         analyzeButton.addEventListener('click', async () => {
+            const apiKey = apiKeyInput.value.trim();
+            if (!apiKey) {
+                message.textContent = 'Google AI Studio API 키를 입력해주세요.';
+                message.className = 'mt-4 text-center font-medium text-red-600';
+                return;
+            }
             if (filesToProcess.length === 0) {
                 message.textContent = '먼저 영수증 이미지를 업로드해주세요.';
+                message.className = 'mt-4 text-center font-medium text-red-600';
                 return;
             }
 
             loader.classList.remove('hidden');
-            message.innerHTML = ''; // 메시지 초기화
+            message.innerHTML = '';
             analyzeButton.disabled = true;
 
             for (let i = 0; i < filesToProcess.length; i++) {
@@ -198,33 +222,31 @@
                 
                 try {
                     const base64ImageData = await fileToBase64(file);
-                    const extractedData = await callGeminiAPI(base64ImageData);
+                    const extractedData = await callGeminiAPI(base64ImageData, apiKey);
 
-                    // 중복 확인
                     if (isDuplicate(extractedData)) {
                         message.innerHTML += `<p class="text-orange-500">'${file.name}'은(는) 이미 추가된 중복 영수증입니다.</p>`;
-                        continue; // 중복이면 다음 파일로 건너뛰기
+                        continue;
                     }
 
                     allReceiptsData.push(extractedData);
                 } catch (error) {
                     console.error(`'${file.name}' 분석 중 오류 발생:`, error);
-                    message.innerHTML += `<p class="text-red-600">'${file.name}' 분석에 실패했습니다.</p>`;
+                    message.innerHTML += `<p class="text-red-600">'${file.name}' 분석에 실패했습니다. API 키가 올바른지 확인해주세요.</p>`;
                 }
             }
             
             displayAllResults();
             
             loader.classList.add('hidden');
-            analyzeButton.disabled = false;
+            checkCanAnalyze();
             filesToProcess = [];
             imagePreviewContainer.innerHTML = '';
         });
 
-        // 중복 영수증인지 확인하는 함수 (상호명, 날짜, 총액 기준)
         function isDuplicate(newReceipt) {
             if (!newReceipt.store || !newReceipt.date || !newReceipt.totalAmount) {
-                return false; // 필수 정보가 없으면 중복으로 간주하지 않음
+                return false;
             }
             const newReceiptKey = `${newReceipt.store}-${newReceipt.date}-${newReceipt.totalAmount}`;
             
@@ -243,8 +265,7 @@
             });
         }
 
-        async function callGeminiAPI(imageData) {
-            const apiKey = "";
+        async function callGeminiAPI(imageData, apiKey) {
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
             const prompt = `
                 당신은 영수증 분석 전문가입니다. 주어진 영수증 이미지에서 다음 정보를 추출하여 JSON 형식으로 반환해주세요.
@@ -273,7 +294,7 @@
                 delay *= 2;
             }
 
-            if (!response || !response.ok) throw new Error(`API 요청 실패: ${response ? response.statusText : '네트워크 오류'}`);
+            if (!response || !response.ok) throw new Error(`API 요청 실패: ${response ? response.statusText : '네트워크 오류 또는 잘못된 API 키'}`);
             const result = await response.json();
             
             if (result.candidates?.[0]?.content?.parts?.[0]) {
@@ -376,7 +397,6 @@
             });
         });
 
-        // Confirmation Modal Logic
         const modal = document.getElementById('confirmation-modal');
         const modalMessage = document.getElementById('modal-message');
         const modalConfirmButton = document.getElementById('modal-confirm-button');
@@ -401,3 +421,5 @@
     </script>
 </body>
 </html>
+
+
