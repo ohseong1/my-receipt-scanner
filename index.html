@@ -119,10 +119,16 @@
                         </table>
                     </div>
 
-                    <div class="text-center mt-8">
-                         <button id="export-button" class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition duration-300 ease-in-out transform hover:scale-105">
-                            3. CSV 파일로 내보내기
-                        </button>
+                    <div class="mt-8 text-center">
+                        <h3 class="text-lg font-medium text-gray-700 mb-4">3. 분석 결과 내보내기</h3>
+                        <div class="flex flex-col sm:flex-row justify-center gap-4">
+                            <button id="export-summary-button" class="w-full sm:w-auto bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition duration-300">
+                                요약 (CSV)
+                            </button>
+                            <button id="export-details-button" class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition duration-300">
+                                상세 내역 (CSV)
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -162,7 +168,8 @@
         const output = document.getElementById('output');
         const message = document.getElementById('message');
         const tableBody = document.getElementById('items-table-body');
-        const exportButton = document.getElementById('export-button');
+        const exportDetailsButton = document.getElementById('export-details-button');
+        const exportSummaryButton = document.getElementById('export-summary-button');
         const clearButton = document.getElementById('clear-button');
         
         let filesToProcess = [];
@@ -342,7 +349,8 @@
             output.classList.remove('hidden');
         }
 
-        exportButton.addEventListener('click', () => {
+        // 상세 내역 내보내기
+        exportDetailsButton.addEventListener('click', () => {
             if (allReceiptsData.length === 0) {
                 message.textContent = '내보낼 데이터가 없습니다.';
                 return;
@@ -378,12 +386,43 @@
             const encodedUri = encodeURI(csvContent);
             const link = document.createElement("a");
             link.setAttribute("href", encodedUri);
-            link.setAttribute("download", `receipt_summary_${new Date().toISOString().slice(0,10)}.csv`);
+            link.setAttribute("download", `receipt_details_${new Date().toISOString().slice(0,10)}.csv`);
             document.body.appendChild(link); 
             link.click();
             document.body.removeChild(link);
 
-            message.textContent = 'CSV 파일이 성공적으로 다운로드되었습니다.';
+            message.textContent = '상세 내역 CSV 파일이 성공적으로 다운로드되었습니다.';
+            message.className = 'mt-4 text-center font-medium text-green-600';
+        });
+
+        // 요약 내보내기
+        exportSummaryButton.addEventListener('click', () => {
+            if (allReceiptsData.length === 0) {
+                message.textContent = '내보낼 데이터가 없습니다.';
+                return;
+            }
+            let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+            const headers = ["날짜", "상호명", "총 금액"];
+            csvContent += headers.join(",") + "\r\n";
+
+            allReceiptsData.forEach(receipt => {
+                const rowData = [
+                    receipt.date || '',
+                    `"${(receipt.store || '').replace(/"/g, '""')}"`,
+                    receipt.totalAmount || ''
+                ];
+                csvContent += rowData.join(",") + "\r\n";
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `receipt_summary_${new Date().toISOString().slice(0,10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            message.textContent = '요약 CSV 파일이 성공적으로 다운로드되었습니다.';
             message.className = 'mt-4 text-center font-medium text-green-600';
         });
 
