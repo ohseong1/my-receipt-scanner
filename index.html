@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>영수증 스캐너 및 가계부 정리</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+        }
+        .loader {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        th, td {
+            text-align: center;
+            padding: 12px;
+            border: 1px solid #e2e8f0;
+        }
+        [contenteditable="true"] {
+            outline: 2px dashed #cbd5e0;
+            cursor: text;
+        }
+         [contenteditable="true"]:focus {
+            outline: 2px solid #3b82f6;
+            background-color: #eff6ff;
+        }
+        .receipt-separator td {
+            background-color: #f3f4f6;
+            font-weight: bold;
+            text-align: left;
+            padding: 8px 16px;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+    <div class="container mx-auto p-4 sm:p-8 max-w-5xl">
+        <div class="bg-white p-8 rounded-2xl shadow-lg">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl sm:text-4xl font-bold text-gray-900">영수증 스캐너 및 가계부 정리</h1>
+                <p class="text-gray-600 mt-2">여러 영수증 사진을 한 번에 올리면 AI가 자동으로 내용을 분석하여 정리해줍니다.</p>
+            </div>
+
+            <!-- 파일 업로드 섹션 -->
+            <div class="mb-6">
+                <label for="receipt-upload" class="block mb-2 text-lg font-medium text-gray-700">1. 영수증 이미지 업로드</label>
+                <div class="flex items-center justify-center w-full">
+                    <label for="receipt-upload" class="flex flex-col items-center justify-center w-full h-64 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
+                        <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                            <svg class="w-10 h-10 mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                            <p class="mb-2 text-sm text-gray-500"><span class="font-semibold">클릭하여 파일 선택</span> 또는 파일들을 끌어다 놓으세요</p>
+                            <p class="text-xs text-gray-500">PNG, JPG, GIF (여러 파일 선택 가능)</p>
+                        </div>
+                        <input id="receipt-upload" type="file" class="hidden" accept="image/*" multiple/>
+                    </label>
+                </div>
+            </div>
+            
+            <div id="image-preview-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
+                <!-- 이미지 미리보기가 여기에 추가됩니다. -->
+            </div>
+
+            <!-- 분석 버튼 -->
+            <div class="text-center mb-8">
+                <button id="analyze-button" class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition duration-300 ease-in-out transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
+                    2. 영수증 분석하기
+                </button>
+            </div>
+
+            <!-- 로딩 및 결과 섹션 -->
+            <div id="result-section">
+                <div id="loader" class="flex justify-center items-center my-8 hidden">
+                    <div class="loader"></div>
+                    <p id="loader-text" class="ml-4 text-gray-600">영수증을 분석하고 있습니다. 잠시만 기다려주세요...</p>
+                </div>
+
+                <div id="output" class="hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-bold text-gray-800">분석 결과 (누적)</h2>
+                        <button id="clear-button" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                            모두 지우기
+                        </button>
+                    </div>
+                    <p class="text-gray-600 mb-4">분석된 내용이 정확하지 않다면, 표의 내용을 직접 클릭하여 수정할 수 있습니다.</p>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="w-full table-auto border-collapse">
+                            <thead class="bg-gray-200">
+                                <tr>
+                                    <th class="w-2/5">항목</th>
+                                    <th class="w-1/5">수량</th>
+                                    <th class="w-1/5">단가</th>
+                                    <th class="w-1/5">금액</th>
+                                </tr>
+                            </thead>
+                            <tbody id="items-table-body">
+                                <!-- 항목들이 여기에 추가됩니다. -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="text-center mt-8">
+                         <button id="export-button" class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition duration-300 ease-in-out transform hover:scale-105">
+                            3. CSV 파일로 내보내기
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="message" class="mt-4 text-center font-medium"></div>
+
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmation-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="mt-3 text-center">
+                <h3 id="modal-title" class="text-lg leading-6 font-medium text-gray-900">확인</h3>
+                <div class="mt-2 px-7 py-3">
+                    <p id="modal-message" class="text-sm text-gray-500"></p>
+                </div>
+                <div class="items-center px-4 py-3">
+                    <button id="modal-confirm-button" class="px-4 py-2 bg-red-500 text-white text-base font-medium rounded-md w-auto shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-300">
+                        삭제
+                    </button>
+                    <button id="modal-cancel-button" class="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md w-auto shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300 ml-2">
+                        취소
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const uploadInput = document.getElementById('receipt-upload');
+        const analyzeButton = document.getElementById('analyze-button');
+        const imagePreviewContainer = document.getElementById('image-preview-container');
+        const loader = document.getElementById('loader');
+        const loaderText = document.getElementById('loader-text');
+        const output = document.getElementById('output');
+        const message = document.getElementById('message');
+        const tableBody = document.getElementById('items-table-body');
+        const exportButton = document.getElementById('export-button');
+        const clearButton = document.getElementById('clear-button');
+        
+        let filesToProcess = [];
+        let allReceiptsData = [];
+
+        // 1. 이미지 업로드 및 미리보기 처리
+        uploadInput.addEventListener('change', (event) => {
+            const files = event.target.files;
+            if (files.length > 0) {
+                message.textContent = '';
+                imagePreviewContainer.innerHTML = '';
+                filesToProcess = [];
+
+                Array.from(files).forEach(file => {
+                    filesToProcess.push(file);
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const img = document.createElement('img');
+                        img.src = e.target.result;
+                        img.className = 'w-full h-auto object-cover rounded-lg shadow-md';
+                        imagePreviewContainer.appendChild(img);
+                    };
+                    reader.readAsDataURL(file);
+                });
+                
+                analyzeButton.disabled = false;
+            }
+        });
+
+        // 2. '영수증 분석하기' 버튼 클릭 이벤트
+        analyzeButton.addEventListener('click', async () => {
+            if (filesToProcess.length === 0) {
+                message.textContent = '먼저 영수증 이미지를 업로드해주세요.';
+                return;
+            }
+
+            loader.classList.remove('hidden');
+            message.innerHTML = ''; // 메시지 초기화
+            analyzeButton.disabled = true;
+
+            for (let i = 0; i < filesToProcess.length; i++) {
+                const file = filesToProcess[i];
+                loaderText.textContent = `영수증 분석 중... (${i + 1}/${filesToProcess.length})`;
+                
+                try {
+                    const base64ImageData = await fileToBase64(file);
+                    const extractedData = await callGeminiAPI(base64ImageData);
+
+                    // 중복 확인
+                    if (isDuplicate(extractedData)) {
+                        message.innerHTML += `<p class="text-orange-500">'${file.name}'은(는) 이미 추가된 중복 영수증입니다.</p>`;
+                        continue; // 중복이면 다음 파일로 건너뛰기
+                    }
+
+                    allReceiptsData.push(extractedData);
+                } catch (error) {
+                    console.error(`'${file.name}' 분석 중 오류 발생:`, error);
+                    message.innerHTML += `<p class="text-red-600">'${file.name}' 분석에 실패했습니다.</p>`;
+                }
+            }
+            
+            displayAllResults();
+            
+            loader.classList.add('hidden');
+            analyzeButton.disabled = false;
+            filesToProcess = [];
+            imagePreviewContainer.innerHTML = '';
+        });
+
+        // 중복 영수증인지 확인하는 함수 (상호명, 날짜, 총액 기준)
+        function isDuplicate(newReceipt) {
+            if (!newReceipt.store || !newReceipt.date || !newReceipt.totalAmount) {
+                return false; // 필수 정보가 없으면 중복으로 간주하지 않음
+            }
+            const newReceiptKey = `${newReceipt.store}-${newReceipt.date}-${newReceipt.totalAmount}`;
+            
+            return allReceiptsData.some(existingReceipt => {
+                const existingReceiptKey = `${existingReceipt.store}-${existingReceipt.date}-${existingReceipt.totalAmount}`;
+                return existingReceiptKey === newReceiptKey;
+            });
+        }
+        
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = error => reject(error);
+            });
+        }
+
+        async function callGeminiAPI(imageData) {
+            const apiKey = "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+            const prompt = `
+                당신은 영수증 분석 전문가입니다. 주어진 영수증 이미지에서 다음 정보를 추출하여 JSON 형식으로 반환해주세요.
+                - date: 구매 날짜 (YYYY-MM-DD 형식)
+                - store: 상호명 또는 사용처
+                - items: 구매한 각 항목의 배열. 각 항목은 name(상품명), quantity(수량), unitPrice(단가), price(금액)을 포함해야 합니다. 수량이나 단가 정보가 없으면 1 또는 price 값으로 추정하세요.
+                - totalAmount: 영수증에 명시된 총 결제 금액 (숫자만)
+                항목 이름이 너무 길면 적절히 줄여주세요. 모든 금액에서 쉼표(,)와 '원' 표시를 제거하고 숫자만 남겨주세요.
+                만약 특정 정보를 찾을 수 없다면, 해당 필드는 "정보 없음"으로 표시해주세요.
+            `;
+            const payload = {
+                contents: [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: imageData } }] }],
+                generationConfig: { responseMimeType: "application/json" }
+            };
+            
+            let response;
+            let retries = 3;
+            let delay = 1000;
+            while (retries > 0) {
+                try {
+                    response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    if (response.ok) break;
+                } catch (error) { console.log(`API 요청 실패. ${delay / 1000}초 후 재시도...`); }
+                retries--;
+                await new Promise(resolve => setTimeout(resolve, delay));
+                delay *= 2;
+            }
+
+            if (!response || !response.ok) throw new Error(`API 요청 실패: ${response ? response.statusText : '네트워크 오류'}`);
+            const result = await response.json();
+            
+            if (result.candidates?.[0]?.content?.parts?.[0]) {
+                return JSON.parse(result.candidates[0].content.parts[0].text);
+            } else {
+                console.error("API 응답 형식 오류:", result);
+                throw new Error('유효한 분석 결과를 받지 못했습니다.');
+            }
+        }
+
+        function displayAllResults() {
+            tableBody.innerHTML = '';
+            if (allReceiptsData.length === 0) {
+                output.classList.add('hidden');
+                return;
+            }
+
+            allReceiptsData.forEach(data => {
+                const date = data.date || '정보 없음';
+                const store = data.store || '정보 없음';
+                const total = data.totalAmount ? Number(data.totalAmount).toLocaleString() : '정보 없음';
+
+                const separatorRow = document.createElement('tr');
+                separatorRow.className = 'receipt-separator';
+                separatorRow.innerHTML = `<td colspan="4"><strong>상호명:</strong> ${store} &nbsp;&nbsp; <strong>날짜:</strong> ${date} &nbsp;&nbsp; <strong>총액:</strong> ${total}원</td>`;
+                tableBody.appendChild(separatorRow);
+
+                if (data.items && data.items.length > 0) {
+                    data.items.forEach(item => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td contenteditable="true" class="text-left p-2">${item.name || ''}</td>
+                            <td contenteditable="true" class="text-right p-2">${item.quantity || 1}</td>
+                            <td contenteditable="true" class="text-right p-2">${item.unitPrice ? Number(item.unitPrice).toLocaleString() : ''}</td>
+                            <td contenteditable="true" class="text-right p-2">${item.price ? Number(item.price).toLocaleString() : ''}</td>
+                        `;
+                        tableBody.appendChild(row);
+                    });
+                } else {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `<td colspan="4" class="text-center p-4">분석된 구매 항목이 없습니다.</td>`;
+                    tableBody.appendChild(row);
+                }
+            });
+            output.classList.remove('hidden');
+        }
+
+        exportButton.addEventListener('click', () => {
+            if (allReceiptsData.length === 0) {
+                message.textContent = '내보낼 데이터가 없습니다.';
+                return;
+            }
+            let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+            const headers = ["날짜", "상호명", "항목", "수량", "단가", "금액", "총 금액"];
+            csvContent += headers.join(",") + "\r\n";
+
+            allReceiptsData.forEach(receipt => {
+                const date = receipt.date || '';
+                const store = `"${(receipt.store || '').replace(/"/g, '""')}"`;
+                const total = receipt.totalAmount || '';
+
+                if (receipt.items && receipt.items.length > 0) {
+                    receipt.items.forEach((item, index) => {
+                        const rowData = [
+                            index === 0 ? date : '',
+                            index === 0 ? store : '',
+                            `"${(item.name || '').replace(/"/g, '""')}"`,
+                            item.quantity || 1,
+                            item.unitPrice || '',
+                            item.price || '',
+                            index === 0 ? total : ''
+                        ];
+                        csvContent += rowData.join(",") + "\r\n";
+                    });
+                } else {
+                    const rowData = [date, store, '항목 없음', '', '', '', total];
+                    csvContent += rowData.join(",") + "\r\n";
+                }
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `receipt_summary_${new Date().toISOString().slice(0,10)}.csv`);
+            document.body.appendChild(link); 
+            link.click();
+            document.body.removeChild(link);
+
+            message.textContent = 'CSV 파일이 성공적으로 다운로드되었습니다.';
+            message.className = 'mt-4 text-center font-medium text-green-600';
+        });
+
+        clearButton.addEventListener('click', () => {
+            showConfirmationModal('정말로 모든 분석 결과를 지우시겠습니까?', () => {
+                allReceiptsData = [];
+                tableBody.innerHTML = '';
+                output.classList.add('hidden');
+                message.textContent = '모든 데이터가 삭제되었습니다.';
+                message.className = 'mt-4 text-center font-medium text-green-600';
+            });
+        });
+
+        // Confirmation Modal Logic
+        const modal = document.getElementById('confirmation-modal');
+        const modalMessage = document.getElementById('modal-message');
+        const modalConfirmButton = document.getElementById('modal-confirm-button');
+        const modalCancelButton = document.getElementById('modal-cancel-button');
+
+        function showConfirmationModal(msg, onConfirm) {
+            modalMessage.textContent = msg;
+            modal.classList.remove('hidden');
+
+            const newConfirmButton = modalConfirmButton.cloneNode(true);
+            modalConfirmButton.parentNode.replaceChild(newConfirmButton, modalConfirmButton);
+            
+            newConfirmButton.addEventListener('click', () => {
+                onConfirm();
+                modal.classList.add('hidden');
+            });
+
+            modalCancelButton.addEventListener('click', () => {
+                modal.classList.add('hidden');
+            });
+        }
+    </script>
+</body>
+</html>
